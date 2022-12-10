@@ -14,7 +14,8 @@ def has_overlap(pair_spec: str) -> bool:
 
 
 def test_overlap_counts():
-    pairs = """2-4,6-8
+    pairs = """\
+    2-4,6-8
     2-3,4-5
     5-7,7-9
     2-8,3-7
