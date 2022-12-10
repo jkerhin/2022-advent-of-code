@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "a400168bbba2e0faa5b554f456985bf45d7ae044fe8495bfd8026a94f30256d3"
+            "sha256": "226725f79b6859be71063b43ca24d384029fc86a3fa2dfe46237abf3f62958ec"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -16,6 +16,10 @@
         ]
     },
     "default": {
+        "2022-advent-of-code": {
+            "editable": true,
+            "path": "."
+        },
         "anyio": {
             "hashes": [
                 "sha256:25ea0d673ae30af41a0c442f81cf3b38c7e79fdc7b60335a4c14e05eb0947421",
