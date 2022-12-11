@@ -7,10 +7,11 @@ name = "pypi"
 ipython = "*"
 requests = "*"
 rich = {extras = ["jupyter"], version = "*"}
-pre-commit = "*"
 2022-advent-of-code = {editable = true, path = "."}
 
 [dev-packages]
+pre-commit = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.11"
