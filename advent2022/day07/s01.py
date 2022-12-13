@@ -4,6 +4,19 @@ That's not the right answer; your answer is too high. If you're stuck, make sure
 using the full input data; there are also some general tips on the about page, or you
 can ask for hints on the subreddit. Please wait one minute before trying again.
 (You guessed 37948890.) [Return to Day 7]
+
+30000000 - Minimum
+37948890 - Too High
+48381165 - Current (????) - Ugh, passed test_inputs instead of actuals!
+37948890 - What?!?! Wrong again? - Well, at least I re-read the problem before submitting
+7068748  - This is the correct answer
+
+Did not read word problem closely enough - weren't looking for smallest node >30M, were
+looking to determine current free space, how much minimally required to get the 30M,
+and then which directory minimally exceeds the needed size
+
+Update: Coroutines (`yield from`) while elegant, were more complex than needed. A simple
+list that gets accumulated was a much easier way to track state
 """
 import logging
 from typing import List, Optional
@@ -43,16 +56,13 @@ class Directory:
         return size
 
     @staticmethod
-    def descend(d: "Directory"):
-        """Recursively descend to the final child directory
+    def traverse(cwd: Optional["Directory"], traversed_directories: List["Directory"]):
+        """Append the current directory, and return any child directories"""
+        traversed_directories.append(cwd)
 
-        https://stackoverflow.com/a/9709131
-
-        """
-        if len(d.child_dirs) == 0:
-            yield d
-        for child in d.child_dirs:
-            yield from Directory.descend(child)
+        if len(cwd.child_dirs) > 0:
+            for child in cwd.child_dirs:
+                Directory.traverse(child, traversed_directories)
 
 
 def navigate_directories(inputs: List[str]) -> Directory:
@@ -99,26 +109,16 @@ def navigate_directories(inputs: List[str]) -> Directory:
     return root_dir
 
 
-def flatten_directories(d: Directory) -> Directory:
-    """Recursively return child directories
-
-    TODO: Only returns 'leaf' children
-    """
-    for child_dir in d.child_dirs:
-        if len(child_dir.child_dirs) > 0:
-            yield from flatten_directories(child_dir)
-        else:
-            yield child_dir
-
-
 def sum_sub_100k(root_dir: Directory) -> int:
-    log.info(f"Root is {root_dir.name}")
+    """Find the total size of all directories whose contents are less than 100000b"""
+    all_dirs = []
+    Directory.traverse(root_dir, all_dirs)
 
     total = 0
-    for d in Directory.descend(root_dir):
+    for d in all_dirs:
         d: Directory = d
         size = d.total_size()
-        log.info(f"Checking size of {d.name} - {size}")
+        log.debug(f"Checking size of {d.name} - {size}")
         if size <= 100_000:
             total += size
             log.info(f"{d.name} is small")
@@ -126,13 +126,30 @@ def sum_sub_100k(root_dir: Directory) -> int:
     return total
 
 
-def find_min_over_30M(inputs: List[str]) -> int:
-    """Find total size of the smallest directory whose total size is > 30M"""
-    _, child_dirs = navigate_directories(inputs)
-    dir_sizes = [d.total_size() for d in child_dirs]
-    print(dir_sizes)
+def find_min_over_30M(root_dir: Directory, system_total_size: int = 70_000_000) -> int:
+    """Given a fixed system size, find minimal directory needed for 30M free space
+
+    system_total_size defines the total space availible on the system
+
+    Find the minimally sized directory that can be deleted to bring unallocated storage
+    up to 30_000_000 bytes, and return the size of that directory
+
+    """
+    current_allocated_space = root_dir.total_size()
+    current_free_space = system_total_size - current_allocated_space
+    log.info(
+        "%d currently allocated (%d free)", current_allocated_space, current_free_space
+    )
+    needed_free_space = 30_000_000 - current_free_space
+    log.info("Need to free %d", needed_free_space)
+
+    all_dirs = []
+    Directory.traverse(root_dir, all_dirs)
+
+    dir_sizes = [d.total_size() for d in all_dirs]
+    log.debug(dir_sizes)
     for size in sorted(dir_sizes):
-        if size >= 30_000_000:
+        if size >= needed_free_space:
             # Since we've sorted the sizes, the first one will be the solution
             return size
 
@@ -153,9 +170,10 @@ if __name__ == "__main__":
     r.raise_for_status()
 
     inputs = [line for line in r.text.splitlines() if line]
+    root_dir = navigate_directories(inputs)
 
-    total_sub = sum_sub_100k(inputs)
+    total_sub = sum_sub_100k(root_dir)
     print(f"{len(inputs)} instructions - {total_sub}")
 
-    min_dir_size = find_min_over_30M(inputs)
+    min_dir_size = find_min_over_30M(root_dir)
     print(f"Minimal size > 30M: {min_dir_size}")
