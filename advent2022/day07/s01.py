@@ -1,17 +1,27 @@
+"""Failed attempt at day7 question 2:
+
+That's not the right answer; your answer is too high. If you're stuck, make sure you're
+using the full input data; there are also some general tips on the about page, or you
+can ask for hints on the subreddit. Please wait one minute before trying again.
+(You guessed 37948890.) [Return to Day 7]
+"""
 import logging
-from textwrap import dedent
-from typing import List
+from typing import List, Optional
 
 from rich.logging import RichHandler
 from rich.traceback import install
+
+from advent2022 import ses
+from advent2022.day07 import test_inputs
 
 install(show_locals=True)
 log = logging.getLogger("rich")
 
 
 class Directory:
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, parent_dir: Optional["Directory"] = None) -> None:
         self.name = name
+        self.parent_dir = parent_dir
 
         self.files = dict()  # filename: filesize
         self.child_dirs = []
@@ -21,7 +31,9 @@ class Directory:
         for fname, size in self.files.items():
             out += f"\n\t{fname} - {size}"
         for d in self.child_dirs:
-            out += f"\n\t{d}"
+            c_dir_str = str(d)
+            for line in c_dir_str.splitlines():
+                out += f"\n\t{line}"
         return out
 
     def total_size(self) -> int:
@@ -29,6 +41,18 @@ class Directory:
         size += sum(self.files.values())
         size += sum(d.total_size() for d in self.child_dirs)
         return size
+
+    @staticmethod
+    def descend(d: "Directory"):
+        """Recursively descend to the final child directory
+
+        https://stackoverflow.com/a/9709131
+
+        """
+        if len(d.child_dirs) == 0:
+            yield d
+        for child in d.child_dirs:
+            yield from Directory.descend(child)
 
 
 def navigate_directories(inputs: List[str]) -> Directory:
@@ -43,26 +67,25 @@ def navigate_directories(inputs: List[str]) -> Directory:
     """
     if inputs[0] != "$ cd /":
         raise IOError("Not starting at root directory!")
-    cwd = Directory("/")
+    root_dir = Directory("/")
+    cwd = root_dir
 
-    parent_dirs = []
     for ix, line in enumerate(inputs[1:]):
         log.debug("%d - %s", ix, str(cwd))
-        log.debug(f"{ix} - Parent dirs: " + " ".join(d.name for d in parent_dirs))
         match line.split():
             case ["$", "ls"]:
                 # Begin 'ls mode', a no-op
                 log.debug("%d -starting 'ls'", ix)
                 continue
             case ["$", "cd", ".."]:
-                tmp: Directory = parent_dirs.pop(-1)
-                log.debug(f"{ix} - 'cd ..' - moving from {cwd.name} to {tmp.name}")
-                tmp.child_dirs.append(cwd)
-                cwd = tmp
+                parent = cwd.parent_dir
+                log.debug(f"{ix} - 'cd ..' - moving from {cwd.name} to {parent.name}")
+                cwd = parent
             case ["$", "cd", dirname]:
                 log.debug(f"{ix} - Descending into {dirname}")
-                parent_dirs.append(cwd)
-                cwd = Directory(dirname)
+                child = Directory(dirname, parent_dir=cwd)
+                cwd.child_dirs.append(child)
+                cwd = child
             case ["dir", dirname]:
                 # Any reason to do anything with these?
                 log.debug(f"{ix} - directory - {dirname}")
@@ -72,52 +95,67 @@ def navigate_directories(inputs: List[str]) -> Directory:
                 cwd.files[file_name] = int(file_size)
     # done processing inputs
 
-    # Navigate back up the tree before returning
-    while len(parent_dirs) > 0:
-        pdir: Directory = parent_dirs.pop(-1)
-        pdir.child_dirs.append(cwd)
-        cwd = pdir
-
-    log.info(str(cwd))
-    return cwd
+    log.info(str(root_dir))
+    return root_dir
 
 
-def sum_sub_100k(input: str) -> int:
-    return 0
+def flatten_directories(d: Directory) -> Directory:
+    """Recursively return child directories
+
+    TODO: Only returns 'leaf' children
+    """
+    for child_dir in d.child_dirs:
+        if len(child_dir.child_dirs) > 0:
+            yield from flatten_directories(child_dir)
+        else:
+            yield child_dir
+
+
+def sum_sub_100k(root_dir: Directory) -> int:
+    log.info(f"Root is {root_dir.name}")
+
+    total = 0
+    for d in Directory.descend(root_dir):
+        d: Directory = d
+        size = d.total_size()
+        log.info(f"Checking size of {d.name} - {size}")
+        if size <= 100_000:
+            total += size
+            log.info(f"{d.name} is small")
+
+    return total
+
+
+def find_min_over_30M(inputs: List[str]) -> int:
+    """Find total size of the smallest directory whose total size is > 30M"""
+    _, child_dirs = navigate_directories(inputs)
+    dir_sizes = [d.total_size() for d in child_dirs]
+    print(dir_sizes)
+    for size in sorted(dir_sizes):
+        if size >= 30_000_000:
+            # Since we've sorted the sizes, the first one will be the solution
+            return size
 
 
 if __name__ == "__main__":
     logging.basicConfig(
-        level="NOTSET",
+        level="INFO",
         format="%(message)s",
         datefmt="[%X]",
         handlers=[RichHandler(rich_tracebacks=True)],
     )
-    inputs = """\
-    $ cd /
-    $ ls
-    dir a
-    14848514 b.txt
-    8504156 c.dat
-    dir d
-    $ cd a
-    $ ls
-    dir e
-    29116 f
-    2557 g
-    62596 h.lst
-    $ cd e
-    $ ls
-    584 i
-    $ cd ..
-    $ cd ..
-    $ cd d
-    $ ls
-    4060174 j
-    8033020 d.log
-    5626152 d.ext
-    7214296 k
-    """
-    inputs = dedent(inputs).splitlines()
-    d = navigate_directories(inputs)
-    print(d.total_size())
+    root_dir = navigate_directories(test_inputs)
+    print(root_dir.total_size())
+    total_sub = sum_sub_100k(root_dir)
+    print(f"Total sub 100k: {total_sub}")
+
+    r = ses.get("https://adventofcode.com/2022/day/7/input")
+    r.raise_for_status()
+
+    inputs = [line for line in r.text.splitlines() if line]
+
+    total_sub = sum_sub_100k(inputs)
+    print(f"{len(inputs)} instructions - {total_sub}")
+
+    min_dir_size = find_min_over_30M(inputs)
+    print(f"Minimal size > 30M: {min_dir_size}")
